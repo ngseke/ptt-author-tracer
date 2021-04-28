@@ -3,23 +3,13 @@ import cheerio from 'cheerio'
 import notifier from 'node-notifier'
 import chalk from 'chalk'
 
-const { log } = console
+import env from './modules/env'
+import log from './modules/log'
+import Article from './interfaces/Article'
 
-require('dotenv').config()
-
-const { authorId, delay } = (() => {
-  const { AUTHOR_ID, DELAY } = process.env
-  if (!AUTHOR_ID) throw new Error('請設定 `env.AUTHOR_ID`')
-  if (!DELAY) throw new Error('請設定 `env.DELAY`')
-  return {
-    authorId: AUTHOR_ID,
-    delay: Number(DELAY),
-  }
-})()
+const { authorId, delay } = env()
 
 const baseUrl = 'https://www.pttweb.cc/'
-
-type Article = { title: string, author: string, time: string, url: string }
 
 const fetchHtml = async (url: string | URL) =>
   (await axios.get(String(url))).data
@@ -28,7 +18,7 @@ const task = async () => {
   const list: { [url: string]: Article } = {}
   let hasInit = false
 
-  while (1) {
+  while ('𝑃𝑇𝑇') {
     const html = await fetchHtml(new URL(`/user/${authorId}?t=article`, baseUrl))
     const $ = cheerio.load(html)
     const $items = $('.thread-item')
@@ -49,12 +39,10 @@ const task = async () => {
         list[article.url] = article
 
         if (hasInit) {
-          notifier.notify({ title: article.title, message: article.time })
-          log('🔔  新文章！')
-          log(`🟢  ${chalk.green.bold(article.title)}  \n    ${chalk.italic(article.time)}`)
-          log('')
+          printArticle(article, true)
+          sendNotification(article)
         } else {
-          log(`🔘  ${chalk.bold(article.title)}  \n    ${chalk.italic(article.time)}`)
+          printArticle(article)
         }
       }
     })
@@ -63,6 +51,34 @@ const task = async () => {
 
     await new Promise((resolve) => setTimeout(resolve, delay * 1000))
   }
+}
+
+const printArticle = (article: Article, isNew = false) => {
+  if (isNew) {
+    log([
+      '🔔  新文章！',
+      `🟢  ${chalk.green.bold(article.title)}`,
+      `    ${chalk.italic(article.time)}`,
+      `    ${chalk.italic(article.url)}`,
+    ])
+  } else {
+    log([
+      `🔘  ${chalk.bold(article.title)}`,
+      `    ${chalk.italic(article.time)}`,
+      `    ${chalk.italic(article.url)}`,
+    ])
+  }
+}
+
+/**
+ * 顯示系統原生通知
+ */
+const sendNotification = (article: Article) => {
+  notifier.notify({
+    title: article.title,
+    message: article.time,
+    open: article.url,
+  })
 }
 
 task()
